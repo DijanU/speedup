@@ -1,7 +1,7 @@
 /*
  * Lab 12 — Speedup y eficiencia (CC3069 Computación Paralela y Distribuida)
  *
- * Un solo programa con 4 experimentos. Cada uno imprime CSV en stdout:
+ * Un solo programa con 5 experimentos. Cada uno imprime CSV en stdout:
  *   modo,N,p,param,t_seq,t_par,t_parte_seq
  *
  *   t_seq        tiempo de la versión 100% secuencial (sin OpenMP) del MISMO trabajo
@@ -13,11 +13,13 @@
  *   ./lab12 suma       [pmax=núcleos]
  *   ./lab12 desbalance [static|dynamic|guided] [W=40000] [pmax=núcleos]
  *   ./lab12 gustafson  [W_por_hilo=100000] [W_seq=20000] [pmax=núcleos]
+ *   ./lab12 superlineal [nodos_por_cadena=2048] [vueltas=512] [p=8]
  *
  * Cada medición se repite REPS = 5 veces y se reporta la MEDIANA
  * (regla de clase: "repite y reporta la mediana").
  */
 #include <omp.h>
+#include <stdint.h>
 #include <stdio.h>
 #include <stdlib.h>
 #include <string.h>
@@ -206,6 +208,81 @@ static void exp_gustafson(long w_por_hilo, long w_seq, int pmax) {
     }
 }
 
+/* Reto opcional: los fragmentos independientes caben en L1 por hilo, pero
+ * el conjunto completo no. Ambas versiones recorren las mismas cadenas. */
+static void exp_superlineal(long nodos, int vueltas, int p) {
+    uint32_t *siguiente = malloc((size_t)nodos * (size_t)p * sizeof(*siguiente));
+    uint32_t *cabezas = malloc((size_t)p * sizeof(*cabezas));
+    uint32_t *permutacion = malloc((size_t)nodos * sizeof(*permutacion));
+    if (!siguiente || !cabezas || !permutacion) {
+        fprintf(stderr, "sin memoria\n");
+        exit(1);
+    }
+
+    for (int cadena = 0; cadena < p; cadena++) {
+        for (uint32_t i = 0; i < (uint32_t)nodos; i++) permutacion[i] = i;
+        uint32_t estado = 0x9e3779b9u ^ (uint32_t)cadena;
+        for (long i = nodos - 1; i > 0; i--) {
+            estado ^= estado << 13;
+            estado ^= estado >> 17;
+            estado ^= estado << 5;
+            uint32_t j = estado % (uint32_t)(i + 1);
+            uint32_t temporal = permutacion[i];
+            permutacion[i] = permutacion[j];
+            permutacion[j] = temporal;
+        }
+        cabezas[cadena] = permutacion[0];
+        for (long i = 0; i < nodos; i++) {
+            siguiente[(size_t)cadena * nodos + permutacion[i]] =
+                permutacion[(i + 1) % nodos];
+        }
+    }
+
+    double tiempos_seq[REPS], tiempos_par[REPS];
+    for (int rep = 0; rep < REPS; rep++) {
+        uint64_t suma = 0;
+        double t0 = omp_get_wtime();
+        for (int vuelta = 0; vuelta < vueltas; vuelta++) {
+            for (int cadena = 0; cadena < p; cadena++) {
+                uint32_t indice = cabezas[cadena];
+                size_t offset = (size_t)cadena * nodos;
+                for (long paso = 0; paso < nodos; paso++) {
+                    indice = siguiente[offset + indice];
+                    suma += indice;
+                }
+            }
+        }
+        tiempos_seq[rep] = omp_get_wtime() - t0;
+        checksum += (double)suma;
+    }
+    double ts = mediana(tiempos_seq);
+
+    for (int rep = 0; rep < REPS; rep++) {
+        uint64_t suma = 0;
+        double t0 = omp_get_wtime();
+#pragma omp parallel for num_threads(p) proc_bind(close) schedule(static) reduction(+ : suma)
+        for (int cadena = 0; cadena < p; cadena++) {
+            uint32_t indice = cabezas[cadena];
+            size_t offset = (size_t)cadena * nodos;
+            for (int vuelta = 0; vuelta < vueltas; vuelta++) {
+                for (long paso = 0; paso < nodos; paso++) {
+                    indice = siguiente[offset + indice];
+                    suma += indice;
+                }
+                indice = cabezas[cadena];
+            }
+        }
+        tiempos_par[rep] = omp_get_wtime() - t0;
+        checksum += (double)suma;
+    }
+    double tp = mediana(tiempos_par);
+    printf("superlineal,%ld,%d,nodos_por_cadena=%ld;vueltas=%d,%.9f,%.9f,0\n",
+           nodos * p, p, nodos, vueltas, ts, tp);
+    free(permutacion);
+    free(cabezas);
+    free(siguiente);
+}
+
 int main(int argc, char **argv) {
     int ncpu = omp_get_num_procs();
     if (argc < 2) {
@@ -214,8 +291,9 @@ int main(int argc, char **argv) {
                 "  %s amdahl     [W=400000] [fp=0.90] [pmax=%d]\n"
                 "  %s suma       [pmax=%d]\n"
                 "  %s desbalance [static|dynamic|guided] [W=40000] [pmax=%d]\n"
-                "  %s gustafson  [W_por_hilo=100000] [W_seq=20000] [pmax=%d]\n",
-                argv[0], ncpu, argv[0], ncpu, argv[0], ncpu, argv[0], ncpu);
+                "  %s gustafson  [W_por_hilo=100000] [W_seq=20000] [pmax=%d]\n"
+                "  %s superlineal [nodos_por_cadena=2048] [vueltas=512] [p=8]\n",
+                argv[0], ncpu, argv[0], ncpu, argv[0], ncpu, argv[0], ncpu, argv[0]);
         return 1;
     }
     printf("modo,N,p,param,t_seq,t_par,t_parte_seq\n");
@@ -238,6 +316,15 @@ int main(int argc, char **argv) {
         long wsq = argc > 3 ? atol(argv[3]) : 20000;
         int pmax = argc > 4 ? atoi(argv[4]) : ncpu;
         exp_gustafson(wph, wsq, pmax);
+    } else if (strcmp(modo, "superlineal") == 0) {
+        long nodos = argc > 2 ? atol(argv[2]) : 2048;
+        int vueltas = argc > 3 ? atoi(argv[3]) : 512;
+        int p = argc > 4 ? atoi(argv[4]) : 8;
+        if (nodos <= 0 || vueltas <= 0 || p <= 0 || nodos > UINT32_MAX) {
+            fprintf(stderr, "nodos, vueltas y p deben ser positivos y nodos <= UINT32_MAX\n");
+            return 1;
+        }
+        exp_superlineal(nodos, vueltas, p);
     } else {
         fprintf(stderr, "modo desconocido: %s\n", modo);
         return 1;

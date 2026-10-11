@@ -1,6 +1,6 @@
 # Lab 12 — Investigación previa (Partes 1 y 2)
 
-CC3069 Computación Paralela y Distribuida · Integrante A (Partes 1 y 2, ver `REPARTO.md`).
+CC3069 Computación Paralela y Distribuida · Estuardo Castro (23890) y Luis Padilla (23663).
 
 Este documento se escribió **antes** de correr los experimentos: tiene los datos del equipo, el marco teórico, el modelo derivado y las predicciones. Las mediciones están en `lab12.ipynb` y la comparación en `reporte_lab12.md`.
 

@@ -1,9 +1,11 @@
 ---
-title: "Lab 12 — Evidencia (Partes 1 y 2)"
-subtitle: "CC3069 · Salidas de terminal capturadas al ejecutar lab12.ipynb"
+title: "Lab 12 — Evidencia"
+subtitle: "CC3069 · Salidas de terminal y resultados de las Partes 1 a 4"
+author: "Estuardo Castro - 23890 · Luis Padilla - 23663"
 ---
 
-Repositorio: <https://github.com/DijanU/speedup>. Las salidas se capturaron al ejecutar `lab12.ipynb` (cada bloque empieza con el comando `$ ...`, y stderr incluye el checksum).
+**Integrantes:** Estuardo Castro (23890) y Luis Padilla (23663).  
+Repositorio: <https://github.com/DijanU/speedup>. Se muestran las salidas registradas al ejecutar `lab12.ipynb` (cada bloque empieza con el comando `$ ...`, y stderr incluye el checksum).
 
 # Datos del equipo (sysctl)
 
@@ -23,6 +25,25 @@ hw.l1dcachesize: 65536
 hw.memsize: 25769803776
 $ pmset -g batt | head -1
 Now drawing from 'Battery Power'
+```
+
+# Equipo asociado a las corridas con p = 16 (identificación actual)
+
+Los CSV de `desbalance` y `gustafson` llegan a p = 16. El equipo Windows disponible durante esta revisión reporta 16 procesadores lógicos; el ejecutable local `lab12.exe`, con fecha de modificación coincidente con las corridas, también informa `pmax=16`. Esta identificación no sustituye una captura tomada durante el experimento; se incluye para distinguir estos datos de las mediciones del MacBook M5 Pro.
+
+```
+PS> Get-CimInstance Win32_Processor | Select Name,NumberOfCores,NumberOfLogicalProcessors
+Name: AMD Ryzen 9 270 w/ Radeon 780M Graphics
+NumberOfCores: 8
+NumberOfLogicalProcessors: 16
+
+PS> Get-CimInstance Win32_ComputerSystem | Select Manufacturer,Model,TotalPhysicalMemory
+Manufacturer: ASUSTeK COMPUTER INC.
+Model: ASUS TUF Gaming A16 FA608UP_FA608UP
+TotalPhysicalMemory: 33568071680 bytes
+
+PS> .\lab12.exe
+Uso: ... [pmax=16]
 ```
 
 # Compilación (make) y uso
@@ -190,12 +211,55 @@ rep 2: S(p=1..15) = 0.98 1.96 2.88 3.79 4.76 5.84 6.76 7.65 8.40 9.22 10.27 11.1
 rep 3: S(p=1..15) = 1.00 1.99 2.98 3.88 4.86 5.79 6.61 7.66 8.52 9.54 10.57 11.34 12.02 12.02 9.60
 ```
 
+# Modo desbalance
+
+```
+$ ./lab12 desbalance static > desb_static.csv
+$ ./lab12 desbalance dynamic > desb_dynamic.csv
+$ ./lab12 desbalance guided > desb_guided.csv
+modo,N,p,param,t_seq,t_par,t_parte_seq
+ desbalance,40000,1,static,0.062,0.063,0.0
+ desbalance,40000,2,static,0.062,0.049,0.0
+ desbalance,40000,4,static,0.062,0.029,0.0
+ desbalance,40000,8,static,0.062,0.016,0.0
+ desbalance,40000,15,static,0.062,0.009,0.0
+ desbalance,40000,1,dynamic,0.062,0.062,0.0
+ desbalance,40000,2,dynamic,0.062,0.033,0.0
+ desbalance,40000,4,dynamic,0.062,0.016,0.0
+ desbalance,40000,8,dynamic,0.062,0.008,0.0
+ desbalance,40000,15,dynamic,0.062,0.005,0.0
+ desbalance,40000,1,guided,0.062,0.062,0.0
+ desbalance,40000,2,guided,0.062,0.032,0.0
+ desbalance,40000,4,guided,0.062,0.015,0.0
+ desbalance,40000,8,guided,0.062,0.008,0.0
+ desbalance,40000,15,guided,0.062,0.004,0.0
+```
+
+# Modo gustafson
+
+```
+$ ./lab12 gustafson > gustafson.csv
+modo,N,p,param,t_seq,t_par,t_parte_seq
+ gustafson,120000,1,Wseq=20000,0.071,0.071,0.031
+ gustafson,220000,2,Wseq=20000,0.111,0.073,0.031
+ gustafson,420000,4,Wseq=20000,0.190,0.072,0.031
+ gustafson,820000,8,Wseq=20000,0.346,0.073,0.033
+ gustafson,1520000,15,Wseq=20000,0.630,0.110,0.032
+ gustafson,1620000,16,Wseq=20000,0.662,0.111,0.033
+```
+
 # Gráficas
 
-![amdahl_speedup.png](resultados/amdahl_speedup.png){width=85%}
+![amdahl_speedup.png](amdahl_speedup.png){width=85%}
 
-![amdahl_eficiencia.png](resultados/amdahl_eficiencia.png){width=85%}
+![amdahl_eficiencia.png](amdahl_eficiencia.png){width=85%}
 
-![suma_speedup.png](resultados/suma_speedup.png){width=85%}
+![suma_speedup.png](suma_speedup.png){width=85%}
 
-Las 4 gráficas restantes (`desbalance_*`, `gustafson_*`) son de las Partes 3 y 4 (integrante B).
+![desbalance_speedup.png](desbalance_speedup.png){width=85%}
+
+![desbalance_eficiencia.png](desbalance_eficiencia.png){width=85%}
+
+![gustafson_speedup.png](gustafson_speedup.png){width=85%}
+
+![gustafson_eficiencia.png](gustafson_eficiencia.png){width=85%}
